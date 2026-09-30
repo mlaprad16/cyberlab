@@ -36,6 +36,4 @@ blue-team and purple-team experimentation.
 
 ## Network Architecture
 
-Management: 192.168.1.0/24
-Cluster backend: 10.10.10.0/24
-Cyber range: 10.20.0.0/24
+Management IPs from ISP, private backend for cluster migrations, seperate network for VMs behind OPNsense
