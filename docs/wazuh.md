@@ -11,6 +11,9 @@ Monitored endpoints:
 - W11-Attack
 - DC01
 
+<img width="1904" height="529" alt="Screen Shot 2026-09-30 at 17 05 21 PM" src="https://github.com/user-attachments/assets/51cf4a28-f958-431d-973c-55344dd99e6d" />
+
+
 ## Deployment
 
 The official Wazuh OVA was imported into Proxmox.
