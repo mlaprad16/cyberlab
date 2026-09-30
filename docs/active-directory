@@ -18,330 +18,205 @@ CYBERLAB
 
 ---
 
-## Architecture
+## Active Directory Architecture
 
-The current Active Directory environment consists of a Windows Server 2025 domain controller and a Windows 11 domain-joined workstation.
+The CyberLab Active Directory environment provides identity, authentication,
+DNS, and security telemetry for the Windows systems in the range.
 
-| System | Role | IP Address |
+```text
+                       cyberlab.test
+                            |
+                  +---------+---------+
+                  |                   |
+                  |       DC01        |
+                  |    10.20.0.50     |
+                  |                   |
+                  |  Active Directory |
+                  |       DNS         |
+                  +---------+---------+
+                            |
+                            |
+                  CyberLab 10.20.0.0/24
+                            |
+          +-----------------+-----------------+
+          |                                   |
+          |                                   |
++---------+----------+              +---------+----------+
+|     W11-Attack     |              |      OPNsense      |
+|                    |              |                    |
+| Domain Workstation |              | Gateway / Firewall |
+|       DHCP         |              |    10.20.0.1       |
++--------------------+              +--------------------+
+```
+
+### Core Systems
+
+| System | Role | Address |
 |---|---|---|
-| DC01 | Domain Controller / DNS | `10.20.0.50` |
-| W11-Attack | Domain-joined Windows workstation | DHCP |
-
-Both systems are connected to the CyberLab network:
-
-```text
-10.20.0.0/24
-```
-
-The default gateway for the network is the OPNsense firewall:
-
-```text
-10.20.0.1
-```
-
----
-
-## Domain Controller
-
-### DC01
-
-DC01 runs Windows Server 2025 and provides the core Active Directory services for the lab.
-
-Primary roles include:
-
-- Active Directory Domain Services (AD DS)
-- Domain authentication
-- DNS
-- User and group management
-- Group Policy testing
-- Security event generation
-
-Network configuration:
-
-```text
-Hostname:       DC01
-IP Address:     10.20.0.50
-Subnet:         10.20.0.0/24
-Default Gateway: 10.20.0.1
-DNS Server:     10.20.0.50
-Domain:         cyberlab.test
-```
-
-DC01 uses itself as its primary DNS server because Active Directory relies on DNS for domain service discovery.
-
----
-
-## Windows Workstation
-
-### W11-Attack
-
-W11-Attack is a Windows 11 workstation joined to the `cyberlab.test` domain.
-
-It serves as a monitored Windows endpoint and target system for security testing.
-
-The workstation allows the lab to generate and observe activity such as:
-
-- Domain authentication
-- User logons
-- Process execution
-- PowerShell activity
-- Network connections
-- Account enumeration
-- Administrative activity
-- Simulated malicious behavior
-
-W11-Attack receives its IP configuration through DHCP from OPNsense and uses DC01 for domain DNS resolution.
+| **DC01** | Domain Controller / DNS | `10.20.0.50` |
+| **W11-Attack** | Domain-joined workstation | DHCP |
+| **OPNsense** | Gateway / Firewall | `10.20.0.1` |
+| **Wazuh** | SIEM / XDR | `10.20.0.60` |
 
 ---
 
 ## Organizational Unit Structure
 
-The domain contains a dedicated organizational structure for CyberLab users.
+The domain uses a dedicated `CyberLab Users` OU with three simulated
+organizational units.
 
 ```text
-cyberlab.test
-│
-├── Domain Controllers
-│   └── DC01
-│
-└── CyberLab Users
-    │
-    ├── The Hangar
-    │
-    ├── BlueCube
-    │
-    └── Ricebox
++------------------------------------------------------+
+|                    cyberlab.test                     |
+|                                                      |
+|   +--------------------+                             |
+|   | Domain Controllers |                             |
+|   |                    |                             |
+|   |       DC01         |                             |
+|   +--------------------+                             |
+|                                                      |
+|   +------------------------------------------------+ |
+|   |               CyberLab Users                   | |
+|   |                                                | |
+|   |  +------------+ +------------+ +------------+ | |
+|   |  | The Hangar | |  BlueCube  | |  Ricebox   | | |
+|   |  +------------+ +------------+ +------------+ | |
+|   +------------------------------------------------+ |
++------------------------------------------------------+
 ```
 
-The corresponding distinguished names are:
+### OU Paths
 
-```text
-OU=CyberLab Users,DC=cyberlab,DC=test
-
-OU=The Hangar,OU=CyberLab Users,DC=cyberlab,DC=test
-OU=BlueCube,OU=CyberLab Users,DC=cyberlab,DC=test
-OU=Ricebox,OU=CyberLab Users,DC=cyberlab,DC=test
-```
-
-The separate organizational units provide multiple simulated organizations or business units for Active Directory testing.
-
----
-
-## Lab Users
-
-The environment contains simulated users distributed across the three organizational units.
-
-### The Hangar
-
-| User | Department |
+| OU | Distinguished Name |
 |---|---|
-| John Smith | Operations |
-| Sarah Johnson | Operations |
-| Michael Williams | IT |
-| Emily Brown | Finance |
-| Daniel Jones | Management |
-
-### BlueCube
-
-| User | Department |
-|---|---|
-| Matthew Thomas | IT |
-| Olivia Moore | HR |
-| Andrew Martin | Engineering |
-| Sophia Jackson | Marketing |
-| Jacob White | Management |
-
-### Ricebox
-
-| User | Department |
-|---|---|
-| Jessica Miller | Engineering |
-| Chris Davis | Engineering |
-| Amanda Wilson | IT |
-| Ryan Anderson | Sales |
-| Ashley Taylor | Finance |
-
-Usernames follow a first-initial + last-name convention.
-
-For example:
-
-```text
-John Smith -> jsmith
-Jessica Miller -> jmiller
-Matthew Thomas -> mthomas
-```
-
-All accounts are synthetic and exist only within the CyberLab environment.
+| CyberLab Users | `OU=CyberLab Users,DC=cyberlab,DC=test` |
+| The Hangar | `OU=The Hangar,OU=CyberLab Users,DC=cyberlab,DC=test` |
+| BlueCube | `OU=BlueCube,OU=CyberLab Users,DC=cyberlab,DC=test` |
+| Ricebox | `OU=Ricebox,OU=CyberLab Users,DC=cyberlab,DC=test` |
 
 ---
 
-## Automated User Provisioning
+## Security Monitoring Architecture
 
-The lab users were created using PowerShell rather than manually creating each account through Active Directory Users and Computers.
+Both Windows systems are monitored using Sysmon and the Wazuh agent.
 
-The provisioning script defines each user's:
+```text
++----------------------+                +----------------------+
+|        DC01          |                |     W11-Attack       |
+|                      |                |                      |
+| Windows Security Log |                | Windows Security Log |
+| Sysmon               |                | Sysmon               |
+| Wazuh Agent          |                | Wazuh Agent          |
++----------+-----------+                +-----------+----------+
+           |                                        |
+           |                                        |
+           +--------------------+-------------------+
+                                |
+                                v
+                     +----------+----------+
+                     |                     |
+                     |        Wazuh        |
+                     |     SIEM / XDR      |
+                     |     10.20.0.60      |
+                     |                     |
+                     +----------+----------+
+                                |
+                                v
+                     +----------+----------+
+                     | Detection Rules     |
+                     | Threat Hunting      |
+                     | Security Alerts     |
+                     +---------------------+
+```
 
-- Name
-- Username
-- Department
-- Organizational Unit
-- User Principal Name
-- Initial account configuration
+### Telemetry Flow
 
-The script then constructs the appropriate OU distinguished name and creates the user using Active Directory PowerShell commands.
-
-Automating account creation makes the environment reproducible and provides experience managing Active Directory through PowerShell.
-
-> Credentials and passwords used by the lab are intentionally excluded from this repository.
+```text
+┌───────────────────┐
+│ Endpoint Activity │
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│ Windows / Sysmon  │
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│    Wazuh Agent    │
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│   Wazuh Manager   │
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│ Detection / Alert │
+└───────────────────┘
+```
 
 ---
 
-## DNS Architecture
+## Security Event Coverage
 
-Active Directory-integrated DNS is provided by DC01.
+The environment provides telemetry for several important Windows and
+Active Directory security events.
 
-Domain-joined systems use:
-
-```text
-10.20.0.50
-```
-
-as their DNS server.
-
-This allows systems to resolve the `cyberlab.test` domain and locate Active Directory services.
-
-The basic resolution path is:
-
-```text
-Domain Client
-     |
-     v
-DC01 / Active Directory DNS
-     |
-     v
-DNS Forwarder
-     |
-     v
-External DNS
-```
-
-This allows DC01 to resolve internal domain records while forwarding external DNS requests when necessary.
+| Event ID | Description | Security Use |
+|---:|---|---|
+| `4624` | Successful logon | Authentication monitoring |
+| `4625` | Failed logon | Failed authentication detection |
+| `4672` | Special privileges assigned | Privileged account monitoring |
+| `4720` | User created | Account creation detection |
+| `4726` | User deleted | Account lifecycle monitoring |
+| `4728` | Global group member added | Privilege/group monitoring |
+| `4729` | Global group member removed | Privilege/group monitoring |
+| `4732` | Local group member added | Local privilege monitoring |
+| `4740` | Account locked out | Authentication attack detection |
 
 ---
 
-## Security Monitoring
+## Detection Lab Role
 
-Both DC01 and W11-Attack are enrolled as Wazuh agents.
-
-```text
-+----------------+                    +----------------+
-|      DC01      |                    |   W11-Attack   |
-|                |                    |                |
-| Windows Logs   |                    | Windows Logs   |
-| Sysmon         |                    | Sysmon         |
-+-------+--------+                    +-------+--------+
-        |                                     |
-        |          Wazuh Agent                |
-        +------------------+------------------+
-                           |
-                           v
-                    +-------------+
-                    |    Wazuh    |
-                    |  SIEM / XDR |
-                    | 10.20.0.60  |
-                    +-------------+
-```
-
-Sysmon is installed on both Windows systems and provides additional endpoint telemetry beyond the standard Windows event logs.
-
-Wazuh collects the Sysmon operational event channel:
+The Active Directory environment provides the identity layer for future
+attack-and-detection exercises.
 
 ```text
-Microsoft-Windows-Sysmon/Operational
+                    ATTACK
+                      |
+                      v
+              +---------------+
+              |     Kali      |
+              | Attack System |
+              +-------+-------+
+                      |
+                      v
+       +--------------+--------------+
+       |                             |
+       v                             v
++-------------+                +-------------+
+| W11-Attack  |                |    DC01     |
+| Workstation |                |     AD      |
++------+------+                +------+------+
+       |                              |
+       |       TELEMETRY              |
+       +--------------+---------------+
+                      |
+                      v
+               +------+------+
+               |    Wazuh    |
+               | SIEM / XDR  |
+               +------+------+
+                      |
+                      v
+               +------+------+
+               | Investigate |
+               |   Detect    |
+               |    Tune     |
+               +-------------+
 ```
-
-This allows endpoint activity to be correlated with Wazuh detection rules.
-
----
-
-## Telemetry Validation
-
-Logging was validated by executing administrative and enumeration commands on the monitored Windows systems.
-
-Example commands include:
-
-```powershell
-whoami
-net user
-net group "Domain Admins" /domain
-Get-ADUser -Filter *
-```
-
-The resulting process activity was recorded by Sysmon and successfully forwarded through the Wazuh agent to the Wazuh server.
-
-This validates the telemetry pipeline:
-
-```text
-User / System Activity
-        |
-        v
-Windows + Sysmon
-        |
-        v
-Wazuh Agent
-        |
-        v
-Wazuh Manager
-        |
-        v
-Detection Rules
-        |
-        v
-Wazuh Dashboard
-```
-
-Wazuh alerts, including high-severity alerts, have been successfully generated from endpoint activity.
-
----
-
-## Active Directory Security Events
-
-The environment can generate Windows Security events related to identity and privilege management.
-
-Examples that can be used in future detection labs include:
-
-| Event ID | Activity |
-|---|---|
-| 4624 | Successful logon |
-| 4625 | Failed logon |
-| 4672 | Special privileges assigned to new logon |
-| 4720 | User account created |
-| 4726 | User account deleted |
-| 4728 | Member added to a global security group |
-| 4729 | Member removed from a global security group |
-| 4732 | Member added to a local security group |
-| 4740 | User account locked out |
-
-These events will be used in future labs involving authentication, account manipulation, privilege escalation, and Active Directory monitoring.
-
----
-
-## Role in the CyberLab
-
-Active Directory provides an identity layer for the CyberLab rather than existing solely as an infrastructure exercise.
-
-The environment enables future security scenarios involving:
-
-- Active Directory enumeration
-- Authentication monitoring
-- Failed logon detection
-- Account lockouts
-- Privileged group modifications
-- Suspicious PowerShell activity
-- Credential-related attacks
-- Lateral movement
-- Domain account abuse
-- Detection engineering
 
 Kali Linux can be used to generate controlled attack activity against domain-connected systems while Wazuh and Sysmon provide defender-side visibility.
 
