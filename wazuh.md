@@ -32,11 +32,11 @@ The appliance subsequently booted successfully.
 Windows endpoints use:
 
 Sysmon
-    ↓
+    ->
 Windows Event Log
-    ↓
+    ->
 Wazuh Agent
-    ↓
+    ->
 Wazuh Manager
-    ↓
+    ->
 Wazuh Dashboard
